@@ -6,7 +6,9 @@ def error(s):
   print('=== ERROR: %s' % s)
 
 print('Initializing notes')
-priv_notes = PrivNotes('123456')
+password = input('Set password:\n')
+
+priv_notes = PrivNotes(password)
 
 print('Adding notes')
 kvs = { 'Groceries': 'lettuce\nbread\nchocolate',

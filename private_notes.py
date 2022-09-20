@@ -1,4 +1,7 @@
 import pickle
+import os
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 class PrivNotes:
   MAX_NOTE_LEN = 2048;
@@ -17,6 +20,15 @@ class PrivNotes:
     Raises:
       ValueError : malformed serialized format
     """
+    #generate salt
+    salt_128 = os.urandom(16)
+
+    #generate key from password
+    kdf = PBKDF2HMAC(algorithm = hashes.SHA256(), length = 32, salt = salt_128, 
+                     iterations = 2000000) 
+    key = kdf.derive(bytes(password, 'ascii'))
+    
+    print('pw raw: ' + password + '\nkey: ' + str(key))
     self.kvs = {}
     if data is not None:
       self.kvs = pickle.loads(bytes.fromhex(data))
