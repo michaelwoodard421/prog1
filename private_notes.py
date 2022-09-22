@@ -2,6 +2,10 @@ import pickle
 import os
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM 
+
+aad = b"authenticated but unencrypted data"
 
 class PrivNotes:
     MAX_NOTE_LEN = 2048;
@@ -20,19 +24,23 @@ class PrivNotes:
         Raises:
           ValueError : malformed serialized format
         """
+        #consider removing these initializations, unnecessary
         self.kvs = {}
         self.key = b'' 
         self.salt =b''
+        self.nonce = b'' 
 
         #initialization case, data and checksum not provided.
         #only generate the salt this one time.
         if not (data or checksum):
-            self.salt = os.urandom(16)
-            
+            random = os.urandom(16)
+            self.salt = random
+            self.nonce = random
             #generate key from password
             kdf = PBKDF2HMAC(algorithm = hashes.SHA256(), length = 32, salt = self.salt, 
                          iterations = 2000000) 
             self.key = kdf.derive(bytes(password, 'ascii'))
+            self.cipher = AESGCM(self.key)
 
         #reloading notes case, make sure data and checksum are provided
         elif not data: 
@@ -40,6 +48,8 @@ class PrivNotes:
         elif not checksum: 
             raise ValueError('Data provided but no checksum.')
         else: 
+            #verify data 
+
             #convert data to bytes for processing
             data = bytes.fromhex(data)
             #splice off salt from data
@@ -50,12 +60,9 @@ class PrivNotes:
             kdf = PBKDF2HMAC(algorithm = hashes.SHA256(), length = 32, salt = self.salt, 
                          iterations = 2000000) 
             self.key = kdf.derive(bytes(password, 'ascii'))
-
+            self.cipher = AESGCM(self.key)
+            
             self.kvs = pickle.loads(data)
-        #serialized_data = data
-        #checksum_ checksum
-        #Verify data 
-        #generate salt
         
 
     def dump(self):
@@ -92,8 +99,11 @@ class PrivNotes:
           note (str) : the note associated with the requested title if
                            it exists and otherwise None
         """
+
         if title in self.kvs:
-            return self.kvs[title]
+            nonce = self.kvs[title][:16]
+            decrypted_note = self.cipher.decrypt(nonce, self.kvs[title][16:], aad).decode('ascii') 
+            return decrypted_note 
         return None
 
     def set(self, title, note):
@@ -113,9 +123,11 @@ class PrivNotes:
         """
         if len(note) > self.MAX_NOTE_LEN:
             raise ValueError('Maximum note length exceeded')
-    
-        self.kvs[title] = note
-
+        
+        note_bytes = bytes(note, 'ascii')
+        #ask saba about if we need to use aad
+        ct = self.cipher.encrypt(self.nonce, note_bytes, aad)
+        self.kvs[title] = self.nonce + ct
 
     def remove(self, title):
         """Removes the note for the requested title from the database.
@@ -136,7 +148,8 @@ class PrivNotes:
 
 #helper functions below
     def print_notes(self):
-        print("Notes:")
-        for item, amount in dct.items():
-            print("{} ({})".format(item, amount))
+        print("\nNotes:")
+        for title, note in self.kvs.items():
+            print("Title: " + str(title) + '\n\tNote: ' + str(note))
+        print('\n')
 

@@ -23,7 +23,6 @@ for title in kvs:
     note = priv_notes.get('non-existent')
     if note is not None:
         error('get failed for title non-existent (expected None, received %s)' % note)
-    print(title, note)
 
 print('Trying to remove notes')
 if not priv_notes.remove('Groceries'):
@@ -45,4 +44,8 @@ for title in kvs:
     if note1 != note2:
         error('get mismatch for title %s (received values %s and %s)' % (title, note1, note2))
 
+print('printing notes after reloading:')
+new_notes_instance.print_notes()
+print('printing decrypted idea note: ')
+print(priv_notes.get('Idea'))
 print('Testing complete')
