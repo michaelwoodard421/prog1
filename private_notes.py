@@ -1,4 +1,5 @@
 import pickle
+import sys
 import os
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
@@ -100,7 +101,9 @@ class PrivNotes:
                            it exists and otherwise None
         """
 
+        #check if title is valid
         if title in self.kvs:
+            #nonce at start of ciphertext, message is the rest
             nonce = self.kvs[title][:16]
             decrypted_note = self.cipher.decrypt(nonce, self.kvs[title][16:], aad).decode('ascii') 
             return decrypted_note 
@@ -125,9 +128,18 @@ class PrivNotes:
             raise ValueError('Maximum note length exceeded')
         
         note_bytes = bytes(note, 'ascii')
-        #ask saba about if we need to use aad
+        
+        #increment nonce, should we add overflow clause or is this unnecessary 
+        nonce_int = int.from_bytes(self.nonce, sys.byteorder) + 1
+
+        #always should be size 16 bytes
+        self.nonce = nonce_int.to_bytes(16, sys.byteorder)
+
+        #encrypt and store message
         ct = self.cipher.encrypt(self.nonce, note_bytes, aad)
         self.kvs[title] = self.nonce + ct
+
+        #ask saba about if we need to use aad
 
     def remove(self, title):
         """Removes the note for the requested title from the database.
