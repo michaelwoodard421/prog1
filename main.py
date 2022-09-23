@@ -15,6 +15,8 @@ kvs = { 'Groceries': 'lettuce\nbread\nchocolate',
 for title in kvs:
     priv_notes.set(title, kvs[title])
 
+priv_notes.print_notes()
+
 print('Trying to fetch notes')
 for title in kvs:
     note = priv_notes.get(title)

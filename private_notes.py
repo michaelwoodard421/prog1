@@ -106,6 +106,9 @@ class PrivNotes:
             #nonce at start of ciphertext, message is the rest
             nonce = self.kvs[title][:16]
             decrypted_note = self.cipher.decrypt(nonce, self.kvs[title][16:], aad).decode('ascii') 
+            #unpad
+            decrypted_note = decrypted_note.rstrip('\00')
+            
             return decrypted_note 
         return None
 
@@ -127,6 +130,12 @@ class PrivNotes:
         if len(note) > self.MAX_NOTE_LEN:
             raise ValueError('Maximum note length exceeded')
         
+
+        #pad lengths. zero pad for now, change later
+        len_diff = self.MAX_NOTE_LEN 
+        note += "\0"*(len_diff) 
+
+        #convert to bytes
         note_bytes = bytes(note, 'ascii')
         
         #increment nonce, should we add overflow clause or is this unnecessary 
@@ -138,8 +147,6 @@ class PrivNotes:
         #encrypt and store message
         ct = self.cipher.encrypt(self.nonce, note_bytes, aad)
         self.kvs[title] = self.nonce + ct
-
-        #ask saba about if we need to use aad
 
     def remove(self, title):
         """Removes the note for the requested title from the database.

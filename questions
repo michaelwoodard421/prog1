@@ -1,3 +1,4 @@
 Q's for prog1:
 
-Why two initializations of the notes? Whats the 'loading notes' section doing?
+Can we call ranndom again with new instance of app?
+Is it safe to use the same random for salt and nonce? If not then what do we do for the nonce?
