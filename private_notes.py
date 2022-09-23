@@ -6,11 +6,8 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM 
 
-aad = b"authenticated but unencrypted data"
-
 class PrivNotes:
     MAX_NOTE_LEN = 2048;
-
     def __init__(self, password, data = None, checksum = None):
         """Constructor.
         
@@ -34,14 +31,19 @@ class PrivNotes:
         #initialization case, data and checksum not provided.
         #only generate the salt this one time.
         if not (data or checksum):
-            random = os.urandom(16)
-            self.salt = random
-            self.nonce = random
+            self.salt = os.urandom(16)
+            zero_int = 0
+            self.nonce = zero_int.to_bytes(16, sys.byteorder)
+
             #generate key from password
             kdf = PBKDF2HMAC(algorithm = hashes.SHA256(), length = 32, salt = self.salt, 
                          iterations = 2000000) 
-            self.key = kdf.derive(bytes(password, 'ascii'))
-            self.cipher = AESGCM(self.key)
+            og_key = kdf.derive(bytes(password, 'ascii'))
+            
+            #split og key in half to make separate hmac and enc keys
+            self.enc_key = og_key[:len(og_key)] 
+            self.hmac_key = og_key[len(og_key):]
+            self.cipher = AESGCM(self.enc_key)
 
         #reloading notes case, make sure data and checksum are provided
         elif not data: 
@@ -53,15 +55,20 @@ class PrivNotes:
 
             #convert data to bytes for processing
             data = bytes.fromhex(data)
-            #splice off salt from data
-            self.salt = data[-16:]
-            data = data[:-16]
+            #splice off salt and nonce from data
+            self.salt = data[-32:-16]
+            self.nonce = data[-16:]
+            data = data[:-32]
             
             #generate key from password
             kdf = PBKDF2HMAC(algorithm = hashes.SHA256(), length = 32, salt = self.salt, 
                          iterations = 2000000) 
-            self.key = kdf.derive(bytes(password, 'ascii'))
-            self.cipher = AESGCM(self.key)
+            og_key = kdf.derive(bytes(password, 'ascii'))
+
+            #split og key in half to make separate hmac and enc keys
+            self.enc_key = og_key[:len(og_key)] 
+            self.hmac_key = og_key[len(og_key):]
+            self.cipher = AESGCM(self.enc_key)
             
             self.kvs = pickle.loads(data)
         
@@ -85,8 +92,11 @@ class PrivNotes:
         digest.update(serialized_data)
         checksum = digest.finalize()
 
-        #append salt to data
-        data = serialized_data + self.salt
+        #convert nonce to string
+        #nonce_str = self.nonce.decode('ascii')
+
+        #append salt and nonce to data
+        data = serialized_data + self.salt + self.nonce 
 
         return data.hex(), checksum.hex()
 
@@ -105,7 +115,7 @@ class PrivNotes:
         if title in self.kvs:
             #nonce at start of ciphertext, message is the rest
             nonce = self.kvs[title][:16]
-            decrypted_note = self.cipher.decrypt(nonce, self.kvs[title][16:], aad).decode('ascii') 
+            decrypted_note = self.cipher.decrypt(nonce, self.kvs[title][16:], None).decode('ascii') 
             #unpad
             decrypted_note = decrypted_note.rstrip('\00')
             
@@ -145,7 +155,7 @@ class PrivNotes:
         self.nonce = nonce_int.to_bytes(16, sys.byteorder)
 
         #encrypt and store message
-        ct = self.cipher.encrypt(self.nonce, note_bytes, aad)
+        ct = self.cipher.encrypt(self.nonce, note_bytes, None)
         self.kvs[title] = self.nonce + ct
 
     def remove(self, title):
