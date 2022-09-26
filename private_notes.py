@@ -1,13 +1,28 @@
 import pickle
 import sys
 import os
-from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import hashes, hmac
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM 
 
 class PrivNotes:
+
     MAX_NOTE_LEN = 2048;
+
+    #helper functions 
+    def print_notes(self):
+        print("\nNotes:")
+        for title, note in self.kvs.items():
+            print("Title: " + str(title) + '\n\tNote: ' + str(note))
+        print('\n')
+
+    def hash_title(self, title):
+        h = hmac.HMAC(self.hmac_key, hashes.SHA256())
+        h.update(bytes(title, 'ascii'))
+        hashed_title =  h.finalize()
+        return hashed_title
+
     def __init__(self, password, data = None, checksum = None):
         """Constructor.
         
@@ -27,6 +42,7 @@ class PrivNotes:
         self.key = b'' 
         self.salt =b''
         self.nonce = b'' 
+        self.password = ''
 
         #initialization case, data and checksum not provided.
         #only generate the salt this one time.
@@ -41,8 +57,8 @@ class PrivNotes:
             og_key = kdf.derive(bytes(password, 'ascii'))
             
             #split og key in half to make separate hmac and enc keys
-            self.enc_key = og_key[:len(og_key)] 
-            self.hmac_key = og_key[len(og_key):]
+            self.enc_key = og_key[:int(len(og_key)/2)] 
+            self.hmac_key = og_key[int(len(og_key)/2):]
             self.cipher = AESGCM(self.enc_key)
 
         #reloading notes case, make sure data and checksum are provided
@@ -56,13 +72,10 @@ class PrivNotes:
             checksum = bytes.fromhex(checksum)
 
             #verify data 
-            print('data going into the hash at veri: ' + str(data[:20]) + str(data[-20:]))
-            print('size: ' + str(len(data)))
             digest = hashes.Hash(hashes.SHA256())
             digest.update(data)
             calculated_hash = digest.finalize()
-            print('hash comparison looks like:\ncalculated hash: '
-                  + str(calculated_hash[:20]) + '\nchecksum: ' +str(checksum[:20]))
+
             if calculated_hash != checksum:
                 raise ValueError('Checksum does not match, serialized data has been tampered with.')
 
@@ -77,8 +90,8 @@ class PrivNotes:
             og_key = kdf.derive(bytes(password, 'ascii'))
 
             #split og key in half to make separate hmac and enc keys
-            self.enc_key = og_key[:len(og_key)] 
-            self.hmac_key = og_key[len(og_key):]
+            self.enc_key = og_key[:int(len(og_key)/2)] 
+            self.hmac_key = og_key[int(len(og_key)/2):]
             self.cipher = AESGCM(self.enc_key)
             
             self.kvs = pickle.loads(data)
@@ -105,8 +118,6 @@ class PrivNotes:
         data = serialized_data + self.salt + self.nonce 
 
         #create checksum (salt and nonce get added so attacker can't change them) 
-        print('data going into the hash at dump: ' + str(data[:20]) + str(data[-20:]))
-        print('size: ' + str(len(data)))
         digest = hashes.Hash(hashes.SHA256())
         digest.update(data)
         checksum = digest.finalize()
@@ -124,16 +135,21 @@ class PrivNotes:
                            it exists and otherwise None
         """
 
+        #hash title
+        hashed_title = self.hash_title(title)
+
         #check if title is valid
-        if title in self.kvs:
-            #nonce at start of ciphertext, message is the rest
-            nonce = self.kvs[title][:16]
-            decrypted_note = self.cipher.decrypt(nonce, self.kvs[title][16:], None).decode('ascii') 
-            #unpad
-            decrypted_note = decrypted_note.rstrip('\00')
-            
-            return decrypted_note 
-        return None
+        if hashed_title not in self.kvs:
+            return None
+        #check for swap attack
+
+        #nonce at start of ciphertext, message is the rest
+        nonce = self.kvs[hashed_title][:16]
+        decrypted_note = self.cipher.decrypt(nonce, self.kvs[hashed_title][16:], None).decode('ascii') 
+        #unpad
+        decrypted_note = decrypted_note.rstrip('\00')
+        
+        return decrypted_note 
 
     def set(self, title, note):
         """Associates a note with a title and adds it to the database
@@ -152,8 +168,11 @@ class PrivNotes:
         """
         if len(note) > self.MAX_NOTE_LEN:
             raise ValueError('Maximum note length exceeded')
-        
 
+       
+        #hash title
+        hashed_title = self.hash_title(title)
+        
         #pad lengths. zero pad for now, change later
         len_diff = self.MAX_NOTE_LEN 
         note += "\0"*(len_diff) 
@@ -161,7 +180,7 @@ class PrivNotes:
         #convert to bytes
         note_bytes = bytes(note, 'ascii')
         
-        #increment nonce, should we add overflow clause or is this unnecessary 
+        #increment nonce
         nonce_int = int.from_bytes(self.nonce, sys.byteorder) + 1
 
         #always should be size 16 bytes
@@ -169,7 +188,7 @@ class PrivNotes:
 
         #encrypt and store message
         ct = self.cipher.encrypt(self.nonce, note_bytes, None)
-        self.kvs[title] = self.nonce + ct
+        self.kvs[hashed_title] = self.nonce + ct
 
     def remove(self, title):
         """Removes the note for the requested title from the database.
@@ -181,17 +200,12 @@ class PrivNotes:
              success (bool) : True if the title was removed and False if the title was
                               not found
         """
+        #hash title
+        hashed_title = self.hash_title(title)
 
-        if title in self.kvs:
-            del self.kvs[title]
+        if hashed_title in self.kvs:
+            del self.kvs[hashed_title]
             return True
 
         return False
-
-#helper functions below
-    def print_notes(self):
-        print("\nNotes:")
-        for title, note in self.kvs.items():
-            print("Title: " + str(title) + '\n\tNote: ' + str(note))
-        print('\n')
 

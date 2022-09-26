@@ -15,7 +15,6 @@ kvs = { 'Groceries': 'lettuce\nbread\nchocolate',
 for title in kvs:
     priv_notes.set(title, kvs[title])
 
-priv_notes.print_notes()
 
 print('Trying to fetch notes')
 for title in kvs:
@@ -46,8 +45,6 @@ for title in kvs:
     if note1 != note2:
         error('get mismatch for title %s (received values %s and %s)' % (title, note1, note2))
 
-print('printing notes after reloading:')
-new_notes_instance.print_notes()
 print('printing decrypted idea note: ')
 print(priv_notes.get('Idea'))
 print('Testing complete')
