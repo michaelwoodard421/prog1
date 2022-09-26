@@ -1,4 +1,27 @@
 Q's for prog1:
 
-Can we call ranndom again with new instance of app?
-Is it safe to use the same random for salt and nonce? If not then what do we do for the nonce?
+
+How to pass nonce through
+Is padding with nulls safe?
+max title len?
+How to pad and leave message unchanged
+Safe to use same key, split, for hmac and password gen?
+
+A:
+Nonce can just start at 0
+Dont use enncryption and mac key same
+Consider splitting key
+Implement padding for messages
+Use aad to prevent swap and rollback attacks
+store nonce in the clear 
+padding: add one and then 0s
+pass in none for aad
+derive key from frist key 
+hkdf for new keygen,hmac used derived
+nonce can be same for different users, dont reuse with key, save in in serialization
+
+TODO: 
+
+Hash titles
+Implement checksum verification
+

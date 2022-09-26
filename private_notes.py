@@ -51,10 +51,21 @@ class PrivNotes:
         elif not checksum: 
             raise ValueError('Data provided but no checksum.')
         else: 
-            #verify data 
-
             #convert data to bytes for processing
             data = bytes.fromhex(data)
+            checksum = bytes.fromhex(checksum)
+
+            #verify data 
+            print('data going into the hash at veri: ' + str(data[:20]) + str(data[-20:]))
+            print('size: ' + str(len(data)))
+            digest = hashes.Hash(hashes.SHA256())
+            digest.update(data)
+            calculated_hash = digest.finalize()
+            print('hash comparison looks like:\ncalculated hash: '
+                  + str(calculated_hash[:20]) + '\nchecksum: ' +str(checksum[:20]))
+            if calculated_hash != checksum:
+                raise ValueError('Checksum does not match, serialized data has been tampered with.')
+
             #splice off salt and nonce from data
             self.salt = data[-32:-16]
             self.nonce = data[-16:]
@@ -87,16 +98,18 @@ class PrivNotes:
         #serialize data 
         serialized_data =  pickle.dumps(self.kvs)
         
-        #create checksum 
-        digest = hashes.Hash(hashes.SHA256())
-        digest.update(serialized_data)
-        checksum = digest.finalize()
-
         #convert nonce to string
         #nonce_str = self.nonce.decode('ascii')
 
         #append salt and nonce to data
         data = serialized_data + self.salt + self.nonce 
+
+        #create checksum (salt and nonce get added so attacker can't change them) 
+        print('data going into the hash at dump: ' + str(data[:20]) + str(data[-20:]))
+        print('size: ' + str(len(data)))
+        digest = hashes.Hash(hashes.SHA256())
+        digest.update(data)
+        checksum = digest.finalize()
 
         return data.hex(), checksum.hex()
 
