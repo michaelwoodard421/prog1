@@ -111,9 +111,6 @@ class PrivNotes:
         #serialize data 
         serialized_data =  pickle.dumps(self.kvs)
         
-        #convert nonce to string
-        #nonce_str = self.nonce.decode('ascii')
-
         #append salt and nonce to data
         data = serialized_data + self.salt + self.nonce 
 
@@ -141,7 +138,6 @@ class PrivNotes:
         #check if title is valid
         if hashed_title not in self.kvs:
             return None
-        #check for swap attack
 
         #nonce at start of ciphertext, message is the rest
         nonce = self.kvs[hashed_title][:16]
@@ -173,9 +169,10 @@ class PrivNotes:
         #hash title
         hashed_title = self.hash_title(title)
         
-        #pad lengths. zero pad for now, change later
-        len_diff = self.MAX_NOTE_LEN 
-        note += "\0"*(len_diff) 
+        #pad lengths. zero pad 
+        len_diff = self.MAX_NOTE_LEN - len(note) 
+        note += "\00"*(len_diff) 
+        print(len(note))
 
         #convert to bytes
         note_bytes = bytes(note, 'ascii')
