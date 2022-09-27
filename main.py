@@ -15,6 +15,8 @@ kvs = { 'Groceries': 'lettuce\nbread\nchocolate',
 for title in kvs:
     priv_notes.set(title, kvs[title])
 
+print('Trying to swap notes')
+priv_notes.swap('Groceries', 'Idea')
 
 print('Trying to fetch notes')
 for title in kvs:

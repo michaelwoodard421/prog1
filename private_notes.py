@@ -20,8 +20,17 @@ class PrivNotes:
     def hash_title(self, title):
         h = hmac.HMAC(self.hmac_key, hashes.SHA256())
         h.update(bytes(title, 'ascii'))
-        hashed_title =  h.finalize()
+        hashed_title = h.finalize()
         return hashed_title
+
+    #for testing against swap
+    def swap(self, key1, key2):
+        h_key1 = self.hash_title(key1)
+        h_key2 = self.hash_title(key2)
+        temp = self.kvs[h_key1]
+        self.kvs[h_key1] = self.kvs[h_key2]
+        self.kvs[h_key2] = temp
+        return None
 
     def __init__(self, password, data = None, checksum = None):
         """Constructor.
@@ -139,9 +148,18 @@ class PrivNotes:
         if hashed_title not in self.kvs:
             return None
 
-        #nonce at start of ciphertext, message is the rest
+        #nonce at start of ciphertext 
         nonce = self.kvs[hashed_title][:16]
-        decrypted_note = self.cipher.decrypt(nonce, self.kvs[hashed_title][16:], None).decode('ascii') 
+        
+        #next is title. check that title matches, for swap attacks
+        observed_hashed_title = self.kvs[hashed_title][16:48]
+        if observed_hashed_title != hashed_title:
+            raise ValueError('Note does not match title')
+            return None
+
+        #rest is note
+        decrypted_note = self.cipher.decrypt(nonce, self.kvs[hashed_title][48:], None).decode('ascii') 
+
         #unpad
         decrypted_note = decrypted_note.rstrip('\00')
         
@@ -168,7 +186,9 @@ class PrivNotes:
        
         #hash title
         hashed_title = self.hash_title(title)
-        
+        print('hashed_title type: ' + str(type(hashed_title))) 
+        print('hashed_title len: ' + str(len(hashed_title))) 
+
         #pad lengths. zero pad 
         len_diff = self.MAX_NOTE_LEN - len(note) 
         note += "\00"*(len_diff) 
@@ -185,8 +205,11 @@ class PrivNotes:
 
         #encrypt and store message
         ct = self.cipher.encrypt(self.nonce, note_bytes, None)
-        self.kvs[hashed_title] = self.nonce + ct
 
+        #add hashed title to start of note to prevent swap attacks add nonce too
+        self.kvs[hashed_title] = self.nonce + hashed_title + ct
+
+        
     def remove(self, title):
         """Removes the note for the requested title from the database.
            
