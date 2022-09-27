@@ -77,21 +77,13 @@ class PrivNotes:
             raise ValueError('Data provided but no checksum.')
         else: 
             #convert data to bytes for processing
-            data = bytes.fromhex(data)
+            master_data = bytes.fromhex(data)
             checksum = bytes.fromhex(checksum)
 
-            #verify data 
-            digest = hashes.Hash(hashes.SHA256())
-            digest.update(data)
-            calculated_hash = digest.finalize()
-
-            if calculated_hash != checksum:
-                raise ValueError('Checksum does not match, serialized data has been tampered with.')
-
             #splice off salt and nonce from data
-            self.salt = data[-32:-16]
-            self.nonce = data[-16:]
-            data = data[:-32]
+            self.salt = master_data[-32:-16]
+            self.nonce = master_data[-16:]
+            data = master_data[:-32]
             
             #generate key from password
             kdf = PBKDF2HMAC(algorithm = hashes.SHA256(), length = 32, salt = self.salt, 
@@ -102,7 +94,15 @@ class PrivNotes:
             self.enc_key = og_key[:int(len(og_key)/2)] 
             self.hmac_key = og_key[int(len(og_key)/2):]
             self.cipher = AESGCM(self.enc_key)
-            
+           
+            #verify checksum and password was correct
+            h = hmac.HMAC(self.hmac_key, hashes.SHA256())
+            h.update(master_data)
+            calculated_hash_w_pw = h.finalize()
+
+            if calculated_hash_w_pw != checksum:
+                raise ValueError('Wrong password or checksum tampered with.')
+
             self.kvs = pickle.loads(data)
         
 
@@ -124,9 +124,9 @@ class PrivNotes:
         data = serialized_data + self.salt + self.nonce 
 
         #create checksum (salt and nonce get added so attacker can't change them) 
-        digest = hashes.Hash(hashes.SHA256())
-        digest.update(data)
-        checksum = digest.finalize()
+        h = hmac.HMAC(self.hmac_key, hashes.SHA256())
+        h.update(data)
+        checksum = h.finalize()
 
         return data.hex(), checksum.hex()
 
@@ -145,7 +145,9 @@ class PrivNotes:
         hashed_title = self.hash_title(title)
 
         #check if title is valid
+        print('len: ' +  str(len(self.kvs)))
         if hashed_title not in self.kvs:
+            print('3')
             return None
 
         #nonce at start of ciphertext 
@@ -155,6 +157,7 @@ class PrivNotes:
         observed_hashed_title = self.kvs[hashed_title][16:48]
         if observed_hashed_title != hashed_title:
             raise ValueError('Note does not match title')
+            print('2')
             return None
 
         #rest is note
@@ -162,7 +165,8 @@ class PrivNotes:
 
         #unpad
         decrypted_note = decrypted_note.rstrip('\00')
-        
+       
+        print('1')
         return decrypted_note 
 
     def set(self, title, note):
@@ -186,13 +190,10 @@ class PrivNotes:
        
         #hash title
         hashed_title = self.hash_title(title)
-        print('hashed_title type: ' + str(type(hashed_title))) 
-        print('hashed_title len: ' + str(len(hashed_title))) 
 
         #pad lengths. zero pad 
         len_diff = self.MAX_NOTE_LEN - len(note) 
         note += "\00"*(len_diff) 
-        print(len(note))
 
         #convert to bytes
         note_bytes = bytes(note, 'ascii')

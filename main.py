@@ -15,8 +15,8 @@ kvs = { 'Groceries': 'lettuce\nbread\nchocolate',
 for title in kvs:
     priv_notes.set(title, kvs[title])
 
-print('Trying to swap notes')
-priv_notes.swap('Groceries', 'Idea')
+#print('Trying to swap notes')
+#priv_notes.swap('Groceries', 'Idea')
 
 print('Trying to fetch notes')
 for title in kvs:
@@ -35,18 +35,20 @@ if note is not None:
     error('get failed for title Groceries (expected None, received %s)' % note)
 if priv_notes.remove('non-existent'):
     error('remove failed for title non-existent')
-
 print('Serializing notes')
 data, checksum = priv_notes.dump()
+
+#print('fucking with the checksum')
+#checksum = checksum[:-2]
 
 print('Loading notes')
 new_notes_instance = PrivNotes('123456', data, checksum)
 for title in kvs:
-    note1 = priv_notes.get(title)
+#    note1 = priv_notes.get(title)
     note2 = new_notes_instance.get(title)
-    if note1 != note2:
-        error('get mismatch for title %s (received values %s and %s)' % (title, note1, note2))
+#    if note1 != note2:
+#        error('get mismatch for title %s (received values %s and %s)' % (title, note1, note2))
 
 print('printing decrypted idea note: ')
-print(priv_notes.get('Idea'))
+print(new_notes_instance.get('Idea'))
 print('Testing complete')
