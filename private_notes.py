@@ -1,3 +1,5 @@
+#Michael Woodard
+#Thomas Durand
 import pickle
 import sys
 import os
