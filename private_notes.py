@@ -23,6 +23,7 @@ class PrivNotes:
         h = hmac.HMAC(self.hmac_key, hashes.SHA256())
         h.update(bytes(title, 'ascii'))
         hashed_title = h.finalize()
+        print(len(hashed_title))
         return hashed_title
 
     #for testing against swap
@@ -54,6 +55,7 @@ class PrivNotes:
         self.salt =b''
         self.nonce = b'' 
         self.password = ''
+        self.loggedin = False
 
         #initialization case, data and checksum not provided.
         #only generate the salt this one time.
@@ -71,6 +73,8 @@ class PrivNotes:
             self.enc_key = og_key[:int(len(og_key)/2)] 
             self.hmac_key = og_key[int(len(og_key)/2):]
             self.cipher = AESGCM(self.enc_key)
+
+            self.loggedin = True 
 
         #reloading notes case, make sure data and checksum are provided
         elif not data: 
@@ -107,6 +111,7 @@ class PrivNotes:
 
             self.kvs = pickle.loads(data)
         
+            self.loggedin = True 
 
     def dump(self):
         """Computes a serialized representation of the notes database
@@ -121,7 +126,8 @@ class PrivNotes:
 
         #serialize data 
         serialized_data =  pickle.dumps(self.kvs)
-        
+        print(type(serialized_data)) 
+        print(type(self.salt))
         #append salt and nonce to data
         data = serialized_data + self.salt + self.nonce 
 
@@ -130,6 +136,7 @@ class PrivNotes:
         h.update(data)
         checksum = h.finalize()
 
+        self.loggedin = False
         return data.hex(), checksum.hex()
 
     def get(self, title):
@@ -143,13 +150,14 @@ class PrivNotes:
                            it exists and otherwise None
         """
 
+        if self.loggedin == False:
+            raise ValueError('Notes instance not currently active. Cannot make queries right now')
+
         #hash title
         hashed_title = self.hash_title(title)
 
         #check if title is valid
-        print('len: ' +  str(len(self.kvs)))
         if hashed_title not in self.kvs:
-            print('3')
             return None
 
         #nonce at start of ciphertext 
@@ -159,7 +167,6 @@ class PrivNotes:
         observed_hashed_title = self.kvs[hashed_title][16:48]
         if observed_hashed_title != hashed_title:
             raise ValueError('Note does not match title')
-            print('2')
             return None
 
         #rest is note
@@ -168,7 +175,6 @@ class PrivNotes:
         #unpad
         decrypted_note = decrypted_note.rstrip('\00')
        
-        print('1')
         return decrypted_note 
 
     def set(self, title, note):
@@ -186,6 +192,9 @@ class PrivNotes:
            Raises:
              ValueError : if note length exceeds the maximum
         """
+        if self.loggedin == False:
+            raise ValueError('Notes instance not currently active. Cannot make queries right now')
+
         if len(note) > self.MAX_NOTE_LEN:
             raise ValueError('Maximum note length exceeded')
 
@@ -223,6 +232,9 @@ class PrivNotes:
              success (bool) : True if the title was removed and False if the title was
                               not found
         """
+        if self.loggedin == False:
+            raise ValueError('Notes instance not currently active. Cannot make queries right now')
+
         #hash title
         hashed_title = self.hash_title(title)
 
